@@ -2,7 +2,6 @@ name: Scrape New TV Series
 
 on:
   schedule:
-    # Runs every day at 04:00 UTC (staggered from movies)
     - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
@@ -23,7 +22,6 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
     permissions:
       contents: write
 
@@ -50,6 +48,7 @@ jobs:
           RESUME:      ${{ github.event.inputs.resume     || 'true' }}
           DELAY_MIN:   '2.0'
           DELAY_MAX:   '4.0'
+          PROXIES:     ${{ secrets.PROXIES }}
         run: python scraper/scraper.py
 
       - name: Commit & push results
