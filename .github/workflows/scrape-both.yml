@@ -2,7 +2,6 @@ name: Scrape Both (Movies + Series)
 
 on:
   schedule:
-    # Full run every Sunday at 00:00 UTC
     - cron: '0 0 * * 0'
   workflow_dispatch:
     inputs:
@@ -43,6 +42,7 @@ jobs:
           START_PAGE:  ${{ github.event.inputs.start_page || '1' }}
           END_PAGE:    ${{ github.event.inputs.end_page   || '0' }}
           RESUME:      ${{ github.event.inputs.resume     || 'true' }}
+          PROXIES:     ${{ secrets.PROXIES }}
         run: python scraper/scraper.py
 
       - name: Commit movies
@@ -63,7 +63,7 @@ jobs:
   scrape-series:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    needs: scrape-movies          # run after movies to avoid git conflicts
+    needs: scrape-movies
     permissions:
       contents: write
 
@@ -82,6 +82,7 @@ jobs:
           START_PAGE:  ${{ github.event.inputs.start_page || '1' }}
           END_PAGE:    ${{ github.event.inputs.end_page   || '0' }}
           RESUME:      ${{ github.event.inputs.resume     || 'true' }}
+          PROXIES:     ${{ secrets.PROXIES }}
         run: python scraper/scraper.py
 
       - name: Commit series
