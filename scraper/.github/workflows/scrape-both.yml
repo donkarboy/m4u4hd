@@ -2,7 +2,6 @@ name: Scrape Both (Movies + Series)
 
 on:
   schedule:
-    # Full run every Sunday at 00:00 UTC
     - cron: '0 0 * * 0'
   workflow_dispatch:
     inputs:
@@ -11,7 +10,7 @@ on:
         required: false
         default: '1'
       end_page:
-        description: 'End page (0 = last known page)'
+        description: 'End page (0 = auto-detect from site)'
         required: false
         default: '0'
       resume:
@@ -20,6 +19,10 @@ on:
         default: 'true'
         type: choice
         options: ['true', 'false']
+      debug:
+        description: 'Dump HTML structure on empty pages (true/false)'
+        required: false
+        default: 'false'
 
 jobs:
   scrape-movies:
@@ -30,25 +33,32 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+        with:
+          fetch-depth: 1
 
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11', cache: pip }
+        with:
+          python-version: '3.11'
+          cache: pip
 
       - run: pip install -r requirements.txt
 
       - name: Scrape movies
         env:
-          SCRAPE_TYPE: movies
-          START_PAGE:  ${{ github.event.inputs.start_page || '1' }}
-          END_PAGE:    ${{ github.event.inputs.end_page   || '0' }}
-          RESUME:      ${{ github.event.inputs.resume     || 'true' }}
+          SCRAPE_TYPE:  movies
+          START_PAGE:   ${{ github.event.inputs.start_page  || '1' }}
+          END_PAGE:     ${{ github.event.inputs.end_page    || '0' }}
+          RESUME:       ${{ github.event.inputs.resume      || 'true' }}
+          SCRAPE_DEBUG: ${{ github.event.inputs.debug       || 'false' }}
+          DELAY_MIN:    '2.0'
+          DELAY_MAX:    '4.0'
         run: python scraper/scraper.py
 
       - name: Commit movies
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           git add data/movies.json
           git diff --cached --quiet || git commit -m "chore: update movies [$(date -u '+%Y-%m-%d')] [skip ci]"
           git push
@@ -63,25 +73,31 @@ jobs:
   scrape-series:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    needs: scrape-movies          # run after movies to avoid git conflicts
+    needs: scrape-movies          # runs after movies job finishes — avoids push conflicts
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+        with:
+          fetch-depth: 1
 
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11', cache: pip }
+        with:
+          python-version: '3.11'
+          cache: pip
 
       - run: pip install -r requirements.txt
 
       - name: Scrape series
         env:
-          SCRAPE_TYPE: series
-          START_PAGE:  ${{ github.event.inputs.start_page || '1' }}
-          END_PAGE:    ${{ github.event.inputs.end_page   || '0' }}
-          RESUME:      ${{ github.event.inputs.resume     || 'true' }}
+          SCRAPE_TYPE:  series
+          START_PAGE:   ${{ github.event.inputs.start_page  || '1' }}
+          END_PAGE:     ${{ github.event.inputs.end_page    || '0' }}
+          RESUME:       ${{ github.event.inputs.resume      || 'true' }}
+          SCRAPE_DEBUG: ${{ github.event.inputs.debug       || 'false' }}
+          DELAY_MIN:    '2.0'
+          DELAY_MAX:    '4.0'
         run: python scraper/scraper.py
 
       - name: Commit series
