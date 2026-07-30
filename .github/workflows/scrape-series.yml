@@ -10,13 +10,17 @@ on:
         required: false
         default: '1'
       end_page:
-        description: 'End page (0 = last known page)'
+        description: 'End page (0 = auto-detect from site)'
         required: false
         default: '0'
       resume:
         description: 'Resume from last scraped page (true/false)'
         required: false
         default: 'true'
+      debug:
+        description: 'Dump HTML structure on empty pages (true/false)'
+        required: false
+        default: 'false'
 
 jobs:
   scrape:
@@ -42,19 +46,20 @@ jobs:
 
       - name: Run scraper (series)
         env:
-          SCRAPE_TYPE: series
-          START_PAGE:  ${{ github.event.inputs.start_page || '1' }}
-          END_PAGE:    ${{ github.event.inputs.end_page   || '0' }}
-          RESUME:      ${{ github.event.inputs.resume     || 'true' }}
-          DELAY_MIN:   '2.0'
-          DELAY_MAX:   '4.0'
-          PROXIES:     ${{ secrets.PROXIES }}
+          SCRAPE_TYPE:  series
+          START_PAGE:   ${{ github.event.inputs.start_page  || '1' }}
+          END_PAGE:     ${{ github.event.inputs.end_page    || '0' }}
+          RESUME:       ${{ github.event.inputs.resume      || 'true' }}
+          SCRAPE_DEBUG: ${{ github.event.inputs.debug       || 'false' }}
+          DELAY_MIN:    '2.0'
+          DELAY_MAX:    '4.0'
         run: python scraper/scraper.py
 
       - name: Commit & push results
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           git add data/series.json
           git diff --cached --quiet || git commit -m "chore: update series data [$(date -u '+%Y-%m-%d %H:%M')] [skip ci]"
           git push
