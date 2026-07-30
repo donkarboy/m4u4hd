@@ -79,13 +79,15 @@ SCRAPE_DEBUG = os.getenv("SCRAPE_DEBUG", "false").lower() == "true"
 
 # ── Proxy Helpers ─────────────────────────────────────────────────────────────
 PROXY_LIST = [
-    ("31.59.20.176",    "6754", "xdwwyuwg", "5j97qhea02pz"),
-    ("31.56.127.193",   "7684", "xdwwyuwg", "5j97qhea02pz"),
-    ("45.38.107.97",    "6014", "xdwwyuwg", "5j97qhea02pz"),
-    ("198.105.121.200", "6462", "xdwwyuwg", "5j97qhea02pz"),
-    ("64.137.96.74",    "6641", "xdwwyuwg", "5j97qhea02pz"),
-    ("198.23.243.226",  "6361", "xdwwyuwg", "5j97qhea02pz"),
-    ("38.154.185.97",   "6370", "xdwwyuwg", "5j97qhea02pz"),
+    ("31.59.20.176",    "6754", "glsbcfvl", "336gxb0or4n9"),  # UK, London
+    ("31.56.127.193",   "7684", "glsbcfvl", "336gxb0or4n9"),  # US, Seattle
+    ("45.38.107.97",    "6014", "glsbcfvl", "336gxb0or4n9"),  # UK, London
+    ("198.105.121.200", "6462", "glsbcfvl", "336gxb0or4n9"),  # UK, London
+    ("64.137.96.74",    "6641", "glsbcfvl", "336gxb0or4n9"),  # ES, Madrid
+    ("198.23.243.226",  "6361", "glsbcfvl", "336gxb0or4n9"),  # US, Los Angeles
+    ("38.154.185.97",   "6370", "glsbcfvl", "336gxb0or4n9"),  # US, Piscataway
+    ("84.247.60.125",   "6095", "glsbcfvl", "336gxb0or4n9"),  # PL, Warsaw
+    ("142.111.67.146",  "5611", "glsbcfvl", "336gxb0or4n9"),  # Working
 ]
 
 
