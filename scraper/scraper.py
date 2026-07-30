@@ -7,6 +7,7 @@ Key fixes:
   4. Smarter fallback: every <a> wrapping an <img> is a candidate card
   5. Title extraction now also checks .film-name, .movie-name, data-title, alt text
   6. Added SCRAPE_DEBUG env var to save page HTML when 0 items found
+  7. Updated proxy credentials + added 2 new proxies (9 total)
 """
 
 import os
@@ -77,7 +78,8 @@ DELAY_MAX = float(os.getenv("DELAY_MAX", "4.0"))
 MAX_ERRORS = 10
 SCRAPE_DEBUG = os.getenv("SCRAPE_DEBUG", "false").lower() == "true"
 
-# ── Proxy Helpers ─────────────────────────────────────────────────────────────
+# ── Proxy List ────────────────────────────────────────────────────────────────
+# Format: (host, port, username, password)
 PROXY_LIST = [
     ("31.59.20.176",    "6754", "glsbcfvl", "336gxb0or4n9"),  # UK, London
     ("31.56.127.193",   "7684", "glsbcfvl", "336gxb0or4n9"),  # US, Seattle
@@ -126,7 +128,6 @@ def debug_html_structure(html: str, label: str = "debug"):
     log.info(f"  DEBUG STRUCTURE for: {label}")
     log.info(f"  Page length: {len(html)} chars")
 
-    # Top 40 classes by frequency
     classes: dict[str, int] = {}
     for tag in soup.find_all(["div", "article", "li", "section", "ul"], class_=True):
         for c in tag.get("class", []):
@@ -134,7 +135,6 @@ def debug_html_structure(html: str, label: str = "debug"):
     top = sorted(classes.items(), key=lambda x: -x[1])[:40]
     log.info("  Top classes: " + ", ".join(f".{c}({n})" for c, n in top))
 
-    # Any links that look like content
     links = []
     for a in soup.select("a[href]"):
         href = a.get("href", "")
@@ -146,7 +146,6 @@ def debug_html_structure(html: str, label: str = "debug"):
     for l in links[:10]:
         log.info(f"    {l}")
 
-    # Save to disk for manual inspection
     if SCRAPE_DEBUG:
         out = Path("debug_last_page.html")
         out.write_text(html, encoding="utf-8")
@@ -157,37 +156,31 @@ def debug_html_structure(html: str, label: str = "debug"):
 
 # ── HTML Parsing ──────────────────────────────────────────────────────────────
 
-# Ordered from most-specific to broadest.
-# Add new selectors at the TOP if you discover a better one via debug output.
 CARD_SELECTORS = [
-    # Site-specific (update these after running --debug once)
     "div.flw-item",
-    "div.film_list-wrap .film-poster",   # flixhq / similar family
+    "div.film_list-wrap .film-poster",
     "div.item",
     "article.item",
     "div.movie-item",
     "div.film-item",
     "div.card.item",
     "div.movie_list li",
-    "div.ml-item",                        # common on m4u family
+    "div.ml-item",
     "div.ml-mask",
     "ul.movie-list li",
     "div.content-item",
     "div.thumb",
-    # Generic: any list-item or article wrapping a poster image
     "li.post-item",
     "article",
 ]
 
 def _extract_from_card(card, page: int, section: str) -> dict | None:
-    """Extract a single item from a card element."""
     item: dict = {
         "page": page,
         "type": section,
         "scraped_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # ── Title & URL ──────────────────────────────────────────────────────────
     title_el = (
         card.select_one("h2 a")
         or card.select_one("h3 a")
@@ -196,7 +189,7 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
         or card.select_one(".movie-name a")
         or card.select_one(".title a")
         or card.select_one("a[title]")
-        or card.select_one("a")          # last resort
+        or card.select_one("a")
     )
     if title_el:
         title = (
@@ -209,7 +202,6 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
         href = title_el.get("href", "")
         item["url"] = href if href.startswith("http") else BASE_URL + href
 
-    # If the card itself is an <a> tag (generic fallback)
     if not item.get("url") and card.name == "a":
         href = card.get("href", "")
         item["url"] = href if href.startswith("http") else BASE_URL + href
@@ -217,7 +209,6 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
         if img and not item.get("title"):
             item["title"] = (img.get("alt") or "").strip()
 
-    # ── Poster ───────────────────────────────────────────────────────────────
     img = (
         card.select_one("img[data-src]")
         or card.select_one("img[data-original]")
@@ -230,7 +221,6 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
             or img.get("src", "")
         )
 
-    # ── Metadata badges ───────────────────────────────────────────────────────
     for badge in card.select(
         ".fdi-item, .badge, .quality, .year, .duration, "
         ".film-detail-fix, .pick, .type, span"
@@ -248,7 +238,6 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
         elif any(u in t.lower() for u in ["min", "h ", "hr", "episode"]):
             item.setdefault("duration", t)
 
-    # ── Rating ────────────────────────────────────────────────────────────────
     r_el = card.select_one(
         ".film-rating span, .rating, .score, .imdb, "
         ".star, [class*='rating'], [class*='score']"
@@ -256,10 +245,8 @@ def _extract_from_card(card, page: int, section: str) -> dict | None:
     if r_el:
         item["rating"] = r_el.get_text(strip=True)
 
-    # Must have at minimum a URL
     if not item.get("url"):
         return None
-    # Filter out obviously wrong URLs
     url = item["url"]
     if url in (BASE_URL, BASE_URL + "/", "/", "") or "javascript" in url:
         return None
@@ -271,7 +258,6 @@ def parse_items(html: str, page: int, section: str) -> list[dict]:
     soup = BeautifulSoup(html, "lxml")
     cards = []
 
-    # Try each selector in order; use the first one that yields results
     for sel in CARD_SELECTORS:
         found = soup.select(sel)
         if found:
@@ -279,12 +265,10 @@ def parse_items(html: str, page: int, section: str) -> list[dict]:
             cards = found
             break
 
-    # Ultimate fallback: every <a> that wraps an <img>
     if not cards:
         for a in soup.find_all("a", href=True):
             if a.find("img"):
                 href = a.get("href", "")
-                # Only include if the href looks like a content page
                 if any(x in href for x in ["/movie", "/watch", "/film", "/tv", "/series", "/show"]):
                     cards.append(a)
 
@@ -382,7 +366,7 @@ def scrape_section(
     all_items = list(existing_items)
     referrer = BASE_URL + path
     consecutive_errors = 0
-    zero_item_streak = 0          # NEW: track how many pages in a row gave 0 items
+    zero_item_streak = 0
 
     scraper = make_scraper(rotator.get())
 
@@ -435,14 +419,12 @@ def scrape_section(
         consecutive_errors = 0
         html = resp.text
 
-        # Auto-detect last page from pagination on first page
         if page == actual_start:
             detected = detect_last_page(html)
             if detected and detected != actual_end:
                 log.info(f"    ℹ Detected last page from HTML: {detected} (was {actual_end})")
                 actual_end = detected
 
-        # Debug: dump structure on first page or when asked
         if debug_first_page and page == actual_start:
             debug_html_structure(html, label=f"{section} page {page}")
 
@@ -453,10 +435,8 @@ def scrape_section(
             zero_item_streak += 1
             log.warning(f"    ⚠ No items on page {page} — site structure may have changed "
                         f"(streak: {zero_item_streak})")
-            # Dump HTML structure after 2 consecutive empty pages to help debug
             if zero_item_streak <= 2:
                 debug_html_structure(html, label=f"{section} page {page} [EMPTY]")
-            # After 5 empty pages, abort — something is wrong
             if zero_item_streak >= 5:
                 log.error("    5 consecutive pages with 0 items — aborting. "
                           "Run with SCRAPE_DEBUG=true and check debug_last_page.html")
@@ -469,7 +449,6 @@ def scrape_section(
 
         referrer = url
 
-        # Rotate proxy every 50 pages
         if rotator._proxies and page % 50 == 0:
             rotator.rotate()
             scraper = make_scraper(rotator.get())
